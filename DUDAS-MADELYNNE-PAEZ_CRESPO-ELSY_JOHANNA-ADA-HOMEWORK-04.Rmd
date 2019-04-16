@@ -1,0 +1,178 @@
+---
+title: "DUDAS-MADELYNNE-PAEZ_CRESPO-ELSY_JOHANNA-ADA-HOMEWORK-04"
+author: "Madelynne Dudas - Elsy Johanna Páez Crespo"
+date: "13/4/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Homework Assignment 4
+
+<span style="color:blue">***Using Bootstrapping to Estimate Standard Errors and CIs for Linear Models:***</span>
+
+[1] Using the KamilarAndCooperData.csv dataset, run a linear regression looking at log(HomeRange_km2) in relation to log(Body_mass_female_mean) and report your beta coeffiecients (slope and intercept).
+
+```{r}
+# Load in dataset
+library (curl)
+f <- curl("https://raw.githubusercontent.com/difiore/ADA-2019/master/KamilarAndCooperData.csv")
+d <- read.csv(f, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+
+# Run linear regression on log(HomeRange_km2) in relation to log(Body_mass_female_mean)
+m <-lm(log(HomeRange_km2)~log(Body_mass_female_mean), data = d)
+summary(m)
+
+# Report beta coeffiecients (slope & intercept)
+m$coefficients
+```
+
+[2] Then, use bootstrapping to sample from your data 1000 times with replacement, each time fitting the same model and calculating the appropriate coefficients. [The size of each sample should be equivalent to the number of observations in your dataset.] This generates a sampling distribution for each beta coefficient. Plot a histogram of these sampling distributions.
+
+```{r}
+# Create a loop that samples from data 1000 times with replacement
+slopes <- NULL
+ints <- NULL
+for (i in 1:1000){
+  dsamp <- d[sample(nrow(d), 213, replace = TRUE),] #there are 213 observations in the dataset
+  m2 <-lm(log(HomeRange_km2)~log(Body_mass_female_mean), data = dsamp) #run linear regressions
+  slopes <-append(slopes,m2$coefficients[2]) #add coefficients to a list for each coefficient to generate sampling distributions
+  ints <- append(ints,m2$coefficients[1])
+}
+```
+
+```{r}
+# Plot 2 histograms of the sample distributions for slope and intercept
+slope_plot <-hist(slopes, col = "white", main = "Sampling Distribution for Slope", 
+    xlab = "Slopes", ylab = "Frequency")
+int_plot <-hist(ints, col = "white", main = "Sampling Distribution for Intercept", 
+    xlab = "Intercepts", ylab = "Frequency")
+```
+
+[3] Estimate the standard error for each of your beta coefficients as the standard deviation of the sampling distribution from your bootstrap.
+
+```{r}
+# Calculate standard deviation of the sampling distribution for slope and intercept
+intsd <- sd(ints)
+intsd
+
+slopesd <-sd(slopes)
+slopesd
+```
+
+[4] Also determine the 95% CI for each of your beta coefficients based on the appropriate quantiles from your sampling distribution.
+
+```{r}
+# Calculate 95% CI for slope and intercept
+# For intercept
+intupper <- mean(ints) + qnorm(0.975, mean = 0, sd = 1) * intsd
+intlower <- mean(ints) + qnorm(0.025, mean = 0, sd = 1) * intsd  
+intci <- c(intlower, intupper)
+intci
+
+# For slope
+slopeupper <- mean(slopes) + qnorm(0.975, mean = 0, sd = 1) * slopesd
+slopelower <- mean(slopes) + qnorm(0.025, mean = 0, sd = 1) * slopesd  
+slopeci <- c(slopelower, slopeupper)
+slopeci
+```
+
+[5] How does your answer to part [3] compare to the SE estimated from your entire dataset using the formula for standard error implemented in lm()?
+
+```{r}
+summary(m)
+```
+<span style="color:green">**For intercept (see "intsd" (~0.596) compared to 0.67293) The intercept SE is slightly lower from bootstrapping than from that calculated from the entire dataset**</span>
+
+<span style="color:green">**For slope (see "slopesd" (~0.0763) compared to 0.08488) The slope SE is also slightly lower from bootstrapping than from that calculated from the entire dataset**</span>
+
+[6] How does your answer to part [4] compare to the 95% CI estimated from your entire dataset?
+```{r}
+confint(m)
+```
+
+<span style="color:green">**The CIs for both slope and intercept is a little bit narrower in part [4] than for the the entire dataset**</span>
+
+[Extra credit +2]: Write a FUNCTION that takes as its arguments a dataframe ("d"), a linear model ("m", as a character string, e.g., logHR~logBM), a user-defined confidence interval level ("conf.level") with default = 0.95, and a number of bootstrap replicates ("n", with default = 1000). Your function should return a dataframe that includes: beta coefficient names; beta coefficients, standard errors, and upper and lower CI limits for the linear model based on your entire dataset; and mean beta coefficient estimates, SEs, and CI limits for those coefficients based on your bootstrap.
+
+```{r}
+lmbootstrap <- function (d, m, conf.level = 0.95, n = 1000, var1, var2) {
+m <-lm(var1~var2, data = d) #run linear regression from teh original dataset
+slopes <- NULL
+ints <- NULL
+for (i in 1:1000){
+  dsamp <- d[sample(nrow(d), length(var1), replace = TRUE),] #lenght as the lenght of a variable including in the linear model
+  m2 <-lm(var1~var2, data = dsamp) #run linear regressions
+  slopes <-append(slopes,m2$coefficients[2]) #add coefficients to a list for each coefficient to generate sampling distributions
+  ints <- append(ints,m2$coefficients[1])
+}
+outcome1 <- data.frame(m$coefficients[2], m$coefficients[1], coef(summary(m))[1, "Std. Error"], coef(summary(m))[2, "Std. Error"], confint(m)[1, "97.5 %"], confint(m)[1, "2.5 %"], confint(m)[2, "97.5 %"], confint(m)[2, "2.5 %"])
+  outcome2 <- data.frame(mean(slopes), mean(ints), intsd, slopesd, intci[2], intci[1], slopeci[2], slopeci[1])
+    colnames(outcome1) <- c("Slope", "Intercept", "SE intercept", "SE slope", "Upper CI (intercept)", "Lower CI (intercept)", "Upper CI (slope)","Lower CI (slope)")
+    colnames(outcome2) <- c("Slope", "Intercept", "SE intercept", "SE slope", "Upper CI (intercept)", "Lower CI (intercept)", "Upper CI (slope)","Lower CI (slope)")
+    outcomefinal <- rbind(outcome1, outcome2)
+    rownames(outcomefinal) <- c("Dataset", "Bootstrap")
+    outcomefinal
+  return(outcomefinal)
+}
+```
+
+```{r}
+# Using this homework's example:
+x <- lmbootstrap(d=d, m=m, var1=log(d$HomeRange_km2), var2=log(d$Body_mass_female_mean))
+x
+```
+
+[Extra Credit +1]: Graph each beta value from the linear model and its corresponding mean value, lower CI and upper CI from a bootstrap as a function of number of bootstraps from 10 to 200 by 10s.
+
+```{r}
+# For slope
+slopes <-append(slopes,m2$coefficients[2]) 
+v <- seq(from = 10, to = 200, by = 10)
+mean <- NULL
+intupper <- NULL
+intlower <- NULL
+for(i in 1:length(v)){
+	m <- mean(slopes[1:v[i]])
+	mean[i] <- m
+	intupper[i] <- m + qnorm(0.975, mean = 0, sd = 1) * slopesd
+	intlower[i] <- m + qnorm(0.025, mean = 0, sd = 1) * slopesd 
+}
+
+library(ggplot2)
+data <- data.frame(mean, intupper, intlower) 
+g <- ggplot(data=data, aes(x = v, y = mean))
+g <- g + xlab("# of Bootstraps")
+g <- g + ylab("Mean of Slopes")
+g <- g + geom_point()
+g <- g + geom_point(aes(x = v, y = mean), colour = "red")
+g <- g + geom_errorbar(aes(ymax= intupper, ymin= intlower))
+g
+```
+
+```{r}
+# For intercept
+intercepts <-append(ints,m2$coefficients[2]) 
+v1 <- seq(from = 10, to = 200, by = 10)
+mean1 <- NULL
+intupper1 <- NULL
+intlower1 <- NULL
+for(i in 1:length(v)){
+	m1 <- mean(ints[1:v[i]])
+	mean1[i] <- m1
+	intupper1[i] <- m1 + qnorm(0.975, mean = 0, sd = 1) * intsd
+	intlower1[i] <- m1 + qnorm(0.025, mean = 0, sd = 1) * intsd 
+}
+
+library(ggplot2)
+data <- data.frame(mean1, intupper1, intlower1)
+g <- ggplot(data=data, aes(x = v1, y = mean1))
+g <- g + xlab("# of Bootstraps")
+g <- g + ylab("Mean of Intercepts")
+g <- g + geom_point()
+g <- g + geom_point(aes(x = v1, y = mean1), colour = "red")
+g <- g + geom_errorbar(aes(ymax= intupper1, ymin= intlower1))
+g
+```
